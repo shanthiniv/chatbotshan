@@ -43,7 +43,7 @@ def get_gemini_model_response(question, image=None):
     
     # Make the request to the Gemini API
     response = requests.post(
-        "https://api.gemini.com/your-endpoint",  # Replace with the actual API endpoint
+        "https://ai.google.dev/gemini-api/docs/api-key",  # Replace with the actual API endpoint
         headers={"Authorization": f"Bearer {os.getenv('GOOGLE_API_KEY')}", "Content-Type": "application/json"},
         data=data,
         files=files
