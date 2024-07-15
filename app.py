@@ -1,67 +1,80 @@
 import os
 import streamlit as st
-from PIL import Image
 from dotenv import load_dotenv
-import requests
-import google.generativeai as genai
-import io
+import google.generativeai as gen_ai
+import requests  # Add this import statement
 
-# Load environment variables from the .env file
+# Load environment variables
 load_dotenv()
 
-# Configure the Gemini API key
-genai.configure(api_key=os.getenv("AIzaSyADox2adxHidZX_87tntJ8YSBKFYvt1oHA"))
+# Configure Streamlit page settings
+st.set_page_config(
+    page_title="Chat with Gemini-Pro!",
+    page_icon=":brain:",  # Favicon emoji
+    layout="centered",  # Page layout option
+)
 
-# Initialize the app
-st.set_page_config(page_title="LLM Project")
-st.header("LLM Gemini Application Project")
+GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
 
-# Input field for the user to ask a question
-user_question = st.text_input("Ask something", key="input")
+# Set up Google Gemini-Pro AI model
+gen_ai.configure(api_key=GOOGLE_API_KEY)
+model = gen_ai.GenerativeModel('gemini-pro')
 
-# File uploader for image
-uploaded_file = st.file_uploader("Upload an image (optional)", type=['jpg', 'jpeg', 'png'])
+# Function to translate roles between Gemini-Pro and Streamlit terminology
+def translate_role_for_streamlit(user_role):
+    if user_role == "model":
+        return "assistant"
+    else:
+        return user_role
 
-# Submit button
-submit = st.button("Submit")
+# Initialize chat session in Streamlit if not already present
+if "chat_session" not in st.session_state:
+    st.session_state.chat_session = model.start_chat(history=[])
 
-def get_gemini_model_response(question, image=None):
-    model = genai.GenerativeModel("gemini-pro")  # Use the appropriate model name
+# Display the chatbot's title on the page
+st.title("🤖 Gemini Pro - ChatBot")
+
+# Display the chat history
+for message in st.session_state.chat_session.history:
+    with st.chat_message(translate_role_for_streamlit(message.role)):
+        st.markdown(message.parts[0].text)
+
+# Input field for user's message
+user_prompt = st.chat_input("Ask Gemini-Pro...")
+if user_prompt:
+    # Add user's message to chat and display it
+    st.chat_message("user").markdown(user_prompt)
+
+    # Send user's message to Gemini-Pro and get the response
+    gemini_response = st.session_state.chat_session.send_message(user_prompt)
+
+    # Display Gemini-Pro's response
+    with st.chat_message("assistant"):
+        st.markdown(gemini_response.text)
+
+# Image upload functionality
+st.header("Upload an Image")
+uploaded_file = st.file_uploader("Choose an image...", type=["jpg", "jpeg", "png"])
+
+if uploaded_file is not None:
+    st.image(uploaded_file, caption="Uploaded Image", use_column_width=True)
     
-    # Create request data
-    data = {"question": question}
-    files = {}
-    
-    if image:
-        # Convert PIL Image to bytes
-        img_byte_arr = io.BytesIO()
-        image.save(img_byte_arr, format=image.format)
-        img_byte_arr = img_byte_arr.getvalue()
-        files = {
-            'image': ('image.jpg', img_byte_arr, 'image/jpeg')
+    # Function to upload image to Gemini API
+    def upload_image_to_gemini(api_key, image_file):
+        url = "https://api.gemini.com/v1/upload"  # Replace with actual endpoint
+        headers = {
+            "Authorization": f"Bearer {api_key}",
         }
-    
-    # Make the request to the Gemini API
-    response = requests.post(
-        "https://ai.google.dev/gemini-api/docs/api-key",  # Replace with the actual API endpoint
-        headers={"Authorization": f"Bearer {os.getenv('GOOGLE_API_KEY')}", "Content-Type": "application/json"},
-        data=data,
-        files=files
-    )
-    
-    if response.status_code == 200:
-        return response.json().get("answer", "No answer returned by the API.")
-    else:
-        return f"Error: {response.status_code}, {response.text}"
+        files = {"file": image_file}
+        
+        response = requests.post(url, headers=headers, files=files)
+        
+        if response.status_code == 200:
+            return response.json()
+        else:
+            return {"error": response.text}
 
-if submit:
-    image = None
-    if uploaded_file:
-        image = Image.open(uploaded_file)
-        st.image(image, caption='Uploaded Image', use_column_width=True)
-    
-    if user_question:
-        model_response = get_gemini_model_response(user_question, image)
-        st.write(model_response)
-    else:
-        st.write("Please enter a question.")
+    if st.button("Upload to Gemini"):
+        response = upload_image_to_gemini(GOOGLE_API_KEY, uploaded_file)
+        st.write("Response from Gemini API:")
+        st.json(response)
