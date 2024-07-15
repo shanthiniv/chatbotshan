@@ -1,18 +1,67 @@
+import os
 import streamlit as st
+from PIL import Image
+from dotenv import load_dotenv
+import requests
+import google.generativeai as genai
+import io
 
-st.title('Gemini AI Assistant')
+# Load environment variables from the .env file
+load_dotenv()
 
-st.write('## Enter your question:')
-user_question = st.text_input('')
+# Configure the Gemini API key
+genai.configure(api_key=os.getenv("AIzaSyADox2adxHidZX_87tntJ8YSBKFYvt1oHA"))
 
-st.write('## Upload an image (optional):')
-uploaded_file = st.file_uploader('', type=['jpg', 'jpeg', 'png'])
+# Initialize the app
+st.set_page_config(page_title="LLM Project")
+st.header("LLM Gemini Application Project")
 
-if st.button('Ask'):
-    st.write('Response: "Gemini" can refer to a few different things. To give you the best answer, I need a little more context. Could you please clarify what you\'re asking about?')
-    st.write('For example, are you interested in:')
-    st.write('- **The Gemini constellation?** This is a constellation in the Northern Hemisphere, known for its bright stars Castor and Pollux.')
-    st.write('- **The Gemini spacecraft?** This was a series of American crewed spacecraft used in the early days of the space race.')
-    st.write('- **The Gemini project?** This was NASA\'s program that developed the Gemini spacecraft and conducted human spaceflights in the mid-1960s.')
-    st.write('- **The Gemini AI model?** This is a large language model developed by Google AI, similar to ChatGPT.')
-    st.write('- **The astrological sign Gemini?** This is one of the twelve signs of the zodiac, associated with the element Air and known for its adaptability, communication skills, and dualistic nature.')
+# Input field for the user to ask a question
+user_question = st.text_input("Ask something", key="input")
+
+# File uploader for image
+uploaded_file = st.file_uploader("Upload an image (optional)", type=['jpg', 'jpeg', 'png'])
+
+# Submit button
+submit = st.button("Submit")
+
+def get_gemini_model_response(question, image=None):
+    model = genai.GenerativeModel("gemini-pro")  # Use the appropriate model name
+    
+    # Create request data
+    data = {"question": question}
+    files = {}
+    
+    if image:
+        # Convert PIL Image to bytes
+        img_byte_arr = io.BytesIO()
+        image.save(img_byte_arr, format=image.format)
+        img_byte_arr = img_byte_arr.getvalue()
+        files = {
+            'image': ('image.jpg', img_byte_arr, 'image/jpeg')
+        }
+    
+    # Make the request to the Gemini API
+    response = requests.post(
+        "https://api.gemini.com/your-endpoint",  # Replace with the actual API endpoint
+        headers={"Authorization": f"Bearer {os.getenv('GOOGLE_API_KEY')}", "Content-Type": "application/json"},
+        data=data,
+        files=files
+    )
+    
+    if response.status_code == 200:
+        return response.json().get("answer", "No answer returned by the API.")
+    else:
+        return f"Error: {response.status_code}, {response.text}"
+
+if submit:
+    image = None
+    if uploaded_file:
+        image = Image.open(uploaded_file)
+        st.image(image, caption='Uploaded Image', use_column_width=True)
+    
+    if user_question:
+        model_response = get_gemini_model_response(user_question, image)
+        st.write(model_response)
+    else:
+        st.write("Please enter a question.")
